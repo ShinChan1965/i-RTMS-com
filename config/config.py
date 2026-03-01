@@ -87,8 +87,8 @@ DB_NAME = "iRTMS"
 # MADDY
 # YOLO SETTINGS
 MODEL_PATH = "yolov8m.pt"
-IMAGE_SIZE = 512             # 640 is optimal for RTX 2050 4GB
-CONFIDENCE_THRESHOLD = 0.35
+IMAGE_SIZE = 640             # 640 is optimal for RTX 2050 4GB
+CONFIDENCE_THRESHOLD = 0.25
 IOU_THRESHOLD = 0.5
 MAX_DETECTIONS = 60
 DEVICE = 0                    # 0 = GPU
@@ -96,13 +96,13 @@ HALF_PRECISION = True         # Use FP16
 
 # DEEPSORT SETTINGS
 MAX_AGE = 45                  # Frames to keep lost track (longer = fewer ID reassignments)
-MIN_HITS = 4                  # Confirm track after N detections (higher = more stable IDs)
-IOU_THRESHOLD_TRACK = 0.7     # Matching threshold for tracker
+MIN_HITS = 2                  # Confirm track after N detections (higher = more stable IDs)
+IOU_THRESHOLD_TRACK = 0.5     # Matching threshold for tracker
 MAX_COSINE_DISTANCE = 0.2
 NN_BUDGET = 100
 
 # LINE CROSSING (anti ID-switch)
-LINE_POSITION_RATIO = 0.38    # Virtual line at 38% from top
+LINE_POSITION_RATIO = 0.45    # Virtual line at 38% from top
 LINE_HYSTERESIS_RATIO = 0.02  # Band around line (2% of height); crossing = zone-to-zonec
 CROSSING_COOLDOWN_FRAMES = 45 # After counting, ignore this track_id for N frames
 
@@ -110,5 +110,5 @@ CROSSING_COOLDOWN_FRAMES = 45 # After counting, ignore this track_id for N frame
 INVERT_COUNTING_DIRECTION = True
 
 # SYSTEM SETTINGS
-FRAME_SKIP = 3                # 1 = process every frame
-INPUT_RESOLUTION = (640, 480) # Recommended
+FRAME_SKIP = 1                # 1 = process every frame
+# INPUT_RESOLUTION = (640, 480) # Recommended

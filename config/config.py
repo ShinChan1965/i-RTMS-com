@@ -1,10 +1,16 @@
 # Camera configuration
 CAMERA_INDEX = 0
 
-FRAME_WIDTH = 1280
-FRAME_HEIGHT = 720
+FRAME_WIDTH = 960
+FRAME_HEIGHT = 540
 
 USE_ROI = True   # Turn ROI ON/OFF easily
+
+# ROI SETTINGS (ratios of full-frame width/height)
+ROI_X1_RATIO = 0.45  # 55% from left
+ROI_X2_RATIO = 0.98  # 98% from left
+ROI_Y1_RATIO = 0.10  # 20% from top
+ROI_Y2_RATIO = 0.98  # 98% from top
 
 
 # MongoDB Atlas Configuration
@@ -86,29 +92,28 @@ DB_NAME = "iRTMS"
 
 # MADDY
 # YOLO SETTINGS
-MODEL_PATH = "yolov8m.pt"
-IMAGE_SIZE = 640             # 640 is optimal for RTX 2050 4GB
-CONFIDENCE_THRESHOLD = 0.25
+MODEL_PATH = "yolov8l.pt"
+IMAGE_SIZE = 640  
+CONFIDENCE_THRESHOLD = 0.30  
 IOU_THRESHOLD = 0.5
-MAX_DETECTIONS = 60
-DEVICE = 0                    # 0 = GPU
+MAX_DETECTIONS = 40  
+DEVICE = 0                    
 HALF_PRECISION = True         # Use FP16
 
 # DEEPSORT SETTINGS
-MAX_AGE = 45                  # Frames to keep lost track (longer = fewer ID reassignments)
-MIN_HITS = 2                  # Confirm track after N detections (higher = more stable IDs)
-IOU_THRESHOLD_TRACK = 0.5     # Matching threshold for tracker
-MAX_COSINE_DISTANCE = 0.2
+MAX_AGE = 30                  
+MIN_HITS = 2                  
+IOU_THRESHOLD_TRACK = 0.5     
+MAX_COSINE_DISTANCE = 0.25
 NN_BUDGET = 100
 
 # LINE CROSSING (anti ID-switch)
-LINE_POSITION_RATIO = 0.45    # Virtual line at 38% from top
+LINE_POSITION_RATIO = 0.50    # Virtual line at 38% from top
 LINE_HYSTERESIS_RATIO = 0.02  # Band around line (2% of height); crossing = zone-to-zonec
-CROSSING_COOLDOWN_FRAMES = 45 # After counting, ignore this track_id for N frames
+CROSSING_COOLDOWN_FRAMES = 20 # After counting, ignore this track_id for N frames
 
-# Flip IN/OUT classification if camera view is reversed
 INVERT_COUNTING_DIRECTION = True
 
 # SYSTEM SETTINGS
-FRAME_SKIP = 1                # 1 = process every frame
-# INPUT_RESOLUTION = (640, 480) # Recommended
+FRAME_SKIP = 1  
+INPUT_RESOLUTION = (640, 480) 

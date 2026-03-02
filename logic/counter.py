@@ -3,6 +3,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import certifi
 import math
+import threading
+import queue
 
 from config.config import MONGO_URI
 
@@ -37,7 +39,19 @@ class PassengerCounter:
         self.events = self.db["passenger_events"]
         self.stops = self.db["stop_counts"]
 
-        print("✅ MongoDB Atlas connected")
+        # Async write queues so DB latency does not freeze the video loop.
+        self._event_queue: "queue.Queue[dict]" = queue.Queue()
+        self._stop_queue: "queue.Queue[dict]" = queue.Queue()
+        self._db_thread_running = True
+
+        self._db_thread = threading.Thread(
+            target=self._db_worker,
+            name="MongoWriter",
+            daemon=True,
+        )
+        self._db_thread.start()
+
+        print("✅ MongoDB Atlas connected (async writes enabled)")
 
     # Update count when line is crossed
     def update(self, track_id, direction, stop, stop_index, centroid_x=None, centroid_y=None):
@@ -70,13 +84,14 @@ class PassengerCounter:
             if len(self.recent_crossings) > MAX_RECENT_CROSSINGS:
                 self.recent_crossings.pop(0)
 
-        # Store individual event
-        self.events.insert_one({
+        # Enqueue individual event for async write to MongoDB so
+        # the video processing loop never blocks on network latency.
+        self._event_queue.put({
             "track_id": track_id,
             "direction": direction,
             "stop": stop,
             "stop_index": stop_index,
-            "timestamp": timestamp
+            "timestamp": timestamp,
         })
 
     def _prune_recent_crossings(self, now):
@@ -108,13 +123,15 @@ class PassengerCounter:
 
         timestamp = datetime.now(self.tz)
 
-        self.stops.insert_one({
+        # Enqueue stop summary for async write so we do not block
+        # the main loop at stop transitions.
+        self._stop_queue.put({
             "stop": stop,
             "stop_index": stop_index,
             "entered": self.entered,
             "exited": self.exited,
             "inside": self.inside,
-            "timestamp": timestamp
+            "timestamp": timestamp,
         })
 
     # Get current counts
@@ -123,3 +140,55 @@ class PassengerCounter:
         # Returns (entered, exited, inside)
         
         return self.entered, self.exited, self.inside
+
+    def _db_worker(self):
+        """
+        Background worker that flushes queued events and stop summaries
+        to MongoDB. Runs as a daemon so UI / video loop never blocks.
+        """
+        while self._db_thread_running or not self._queues_empty():
+            try:
+                # Prioritize event writes; fall back to stop docs.
+                try:
+                    event = self._event_queue.get(timeout=0.1)
+                    try:
+                        self.events.insert_one(event)
+                    except Exception as e:
+                        print(f"[MongoDB] Failed to write event: {e}")
+                    finally:
+                        self._event_queue.task_done()
+                    continue
+                except queue.Empty:
+                    pass
+
+                try:
+                    stop_doc = self._stop_queue.get_nowait()
+                    try:
+                        self.stops.insert_one(stop_doc)
+                    except Exception as e:
+                        print(f"[MongoDB] Failed to write stop summary: {e}")
+                    finally:
+                        self._stop_queue.task_done()
+                except queue.Empty:
+                    pass
+            except Exception as e:
+                # Last-resort catch so background thread never dies silently.
+                print(f"[MongoDB] DB worker error: {e}")
+
+    def _queues_empty(self) -> bool:
+        return self._event_queue.empty() and self._stop_queue.empty()
+
+    def close(self):
+        """
+        Signal the background DB writer to stop after flushing queues
+        and close the MongoDB client. Call this once on clean shutdown.
+        """
+        # Stop accepting new work and wait for queues to drain.
+        self._db_thread_running = False
+        try:
+            self._event_queue.join()
+            self._stop_queue.join()
+        except Exception:
+            pass
+        # Now it is safe to close the client; worker loop will exit.
+        self.client.close()

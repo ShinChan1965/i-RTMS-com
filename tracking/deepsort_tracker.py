@@ -1,5 +1,7 @@
 from deep_sort_realtime.deepsort_tracker import DeepSort
+# import time
 
+# start = time.time()
 from config.config import (
     MAX_AGE,
     MIN_HITS,
@@ -17,7 +19,7 @@ class DeepSORTTracker:
             nn_budget=NN_BUDGET,
             nms_max_overlap=IOU_THRESHOLD_TRACK,
             embedder="mobilenet",
-            embedder_gpu=False,
+            embedder_gpu=True,
             half=True,
             bgr=True
         )
@@ -34,5 +36,6 @@ class DeepSORTTracker:
                 conf,
                 "person"
             ))
-
+        # tracks = self.tracker.update_tracks(formatted, frame=frame)
+        # print("DeepSORT time:", time.time() - start)
         return self.tracker.update_tracks(formatted, frame=frame)

@@ -3,6 +3,8 @@ import cv2
 import torch
 torch.backends.cudnn.benchmark = True
 from ultralytics import YOLO
+import time
+from collections import deque
 
 from camera.video_stream import VideoStream
 from detection.yolo_detector import YOLODetector
@@ -16,10 +18,42 @@ from config.config import (
     CROSSING_COOLDOWN_FRAMES,
     INVERT_COUNTING_DIRECTION,
     MODEL_PATH,
+    ROI_X1_RATIO,
+    ROI_X2_RATIO,
+    ROI_Y1_RATIO,
+    ROI_Y2_RATIO,
+    FRAME_SKIP,
 )
 
 # MODE SWITCH
 DEBUG_MODE = True   # True = Debug | False = Deployment
+PROFILE_LOOP_TIME = False  # Print real loop time / FPS periodically
+
+
+def _iou(boxA, boxB):
+    """
+    IoU between two boxes in (x1, y1, x2, y2) format.
+    Used to suppress duplicate tracker boxes that heavily overlap.
+    """
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+
+    inter_w = max(0, xB - xA)
+    inter_h = max(0, yB - yA)
+    inter_area = inter_w * inter_h
+
+    if inter_area <= 0:
+        return 0.0
+
+    boxA_area = max(0, boxA[2] - boxA[0]) * max(0, boxA[3] - boxA[1])
+    boxB_area = max(0, boxB[2] - boxB[0]) * max(0, boxB[3] - boxB[1])
+
+    if boxA_area <= 0 or boxB_area <= 0:
+        return 0.0
+
+    return inter_area / float(boxA_area + boxB_area - inter_area)
 
 
 def main():
@@ -47,22 +81,27 @@ def main():
     else:
         print("🚀 Running in DEPLOYMENT MODE (Auto-start)")
 
+    frame_count = 0
+
+    # Rolling loop-time stats (measured INSIDE the while loop)
+    loop_times = deque(maxlen=60)
+    last_profile_print = time.perf_counter()
+
     try:
         while True:
+            loop_start = time.perf_counter()
             # READ FRAME
             frame = video.read()
-            # With threaded capture, we may briefly get None before
-            # the first frame arrives; just skip those iterations.
+    
             if frame is None:
                 continue
-            # Dynamic ROI
+
             h, w = frame.shape[:2]
 
-            ROI_X1 = int(w * 0.10)
-            ROI_X2 = int(w * 0.75)
-            ROI_Y1 = int(h * 0.08)
-            ROI_Y2 = int(h * 0.97)
-
+            ROI_X1 = int(w * ROI_X1_RATIO)
+            ROI_X2 = int(w * ROI_X2_RATIO)
+            ROI_Y1 = int(h * ROI_Y1_RATIO)
+            ROI_Y2 = int(h * ROI_Y2_RATIO)
 
             # ROI SELECTION
             if USE_ROI:
@@ -70,9 +109,19 @@ def main():
             else:
                 detection_frame = frame
 
-            # YOLO DETECTION
-            detections = yolo.detect(detection_frame)
-    
+
+
+            # Decide whether to run YOLO this frame (frame skipping)
+            frame_count += 1
+            run_detection = (FRAME_SKIP <= 1) or (frame_count % FRAME_SKIP == 0)
+
+            if run_detection:
+                detections = yolo.detect(detection_frame)
+            else:
+                detections = []
+
+
+
             # DEEPSORT TRACKING
             tracks = tracker.update(detections, detection_frame)
 
@@ -91,11 +140,12 @@ def main():
                     )
 
             # PROCESS TRACKS
+            # 1) Collect confirmed tracks with full-frame boxes.
+            confirmed_tracks = []
             for track in tracks:
                 if not track.is_confirmed():
                     continue
 
-                track_id = track.track_id
                 x1, y1, x2, y2 = map(int, track.to_ltrb())
 
                 # Convert ROI coords back to full frame
@@ -104,6 +154,25 @@ def main():
                     x2 += ROI_X1
                     y1 += ROI_Y1
                     y2 += ROI_Y1
+
+                confirmed_tracks.append((track, (x1, y1, x2, y2)))
+
+            # 2) Suppress duplicate / heavily overlapping boxes.
+            deduped_tracks = []
+            IOU_SUPPRESS_THRESHOLD = 0.7
+
+            for track, box in confirmed_tracks:
+                duplicate = False
+                for _, kept_box in deduped_tracks:
+                    if _iou(box, kept_box) > IOU_SUPPRESS_THRESHOLD:
+                        duplicate = True
+                        break
+                if not duplicate:
+                    deduped_tracks.append((track, box))
+
+            # 3) Use deduped tracks for counting + drawing.
+            for track, (x1, y1, x2, y2) in deduped_tracks:
+                track_id = track.track_id
 
                 centroid_x = (x1 + x2) // 2
                 centroid_y = (y1 + y2) // 2
@@ -181,11 +250,25 @@ def main():
             # Advance line-crossing frame index for cooldown
             line.tick()
 
+            # Correct loop-time measurement (this is the right place)
+            if PROFILE_LOOP_TIME:
+                dt = time.perf_counter() - loop_start
+                loop_times.append(dt)
+
+                now = time.perf_counter()
+                if (now - last_profile_print) >= 1.0:
+                    avg_dt = sum(loop_times) / max(1, len(loop_times))
+                    fps = (1.0 / avg_dt) if avg_dt > 0 else 0.0
+                    print(f"[PERF] avg_loop={avg_dt:.3f}s (~{fps:.1f} FPS), last={dt:.3f}s")
+                    last_profile_print = now
+
     except KeyboardInterrupt:
         print("\n🛑 Interrupted")
 
     finally:
         counter.store_stop_data(current_stop, stop_index)
+        # Flush and close MongoDB resources (async writer).
+        counter.close()
         video.release()
 
         if DEBUG_MODE:
@@ -193,7 +276,6 @@ def main():
 
         print("✅ MongoDB updated")
         print("📦 Resources released")
-
 
 if __name__ == "__main__":
     main()

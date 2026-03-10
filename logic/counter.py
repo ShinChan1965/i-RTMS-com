@@ -86,12 +86,16 @@ class PassengerCounter:
 
         # Enqueue individual event for async write to MongoDB so
         # the video processing loop never blocks on network latency.
+        # We also store a realtime snapshot of totals at this moment.
         self._event_queue.put({
             "track_id": track_id,
             "direction": direction,
             "stop": stop,
             "stop_index": stop_index,
             "timestamp": timestamp,
+            "entered_total": self.entered,
+            "exited_total": self.exited,
+            "inside_total": self.inside,
         })
 
     def _prune_recent_crossings(self, now):

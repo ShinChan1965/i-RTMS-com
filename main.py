@@ -22,7 +22,7 @@ from config.config import (
     ROI_X2_RATIO,
     ROI_Y1_RATIO,
     ROI_Y2_RATIO,
-    FRAME_SKIP,
+    FRAME_SKIP
 )
 
 # MODE SWITCH

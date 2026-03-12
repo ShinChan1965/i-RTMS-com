@@ -92,7 +92,8 @@ DB_NAME = "iRTMS"
 
 # MADDY
 # YOLO SETTINGS
-MODEL_PATH = "yolov8l.pt"
+# MODEL_PATH = "yolov8l.pt"
+MODEL_PATH = r"C:\Users\silent killer\runs\detect\train3\weights\best.pt"
 IMAGE_SIZE = 640  
 CONFIDENCE_THRESHOLD = 0.30  
 IOU_THRESHOLD = 0.5

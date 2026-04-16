@@ -15,20 +15,15 @@ MAX_RECENT_CROSSINGS = 50
 
 class PassengerCounter:
     def __init__(self):
-        # Counters
         self.entered = 0
         self.exited = 0
         self.inside = 0
 
-        # Prevent duplicate counting per stop (track_id, stop_index)
         self.processed_ids = set()
-        # Recent crossings (cx, cy, direction, timestamp) for spatial dedup on ID switch
         self.recent_crossings = []
 
-        # Timezone (India)
         self.tz = ZoneInfo("Asia/Kolkata")
 
-        # MongoDB Atlas connection
         self.client = MongoClient(
             MONGO_URI,
             tls=True,
@@ -39,7 +34,6 @@ class PassengerCounter:
         self.events = self.db["passenger_events"]
         self.stops = self.db["stop_counts"]
 
-        # Async write queues so DB latency does not freeze the video loop.
         self._event_queue: "queue.Queue[dict]" = queue.Queue()
         self._stop_queue: "queue.Queue[dict]" = queue.Queue()
         self._db_thread_running = True
@@ -53,14 +47,14 @@ class PassengerCounter:
 
         print("✅ MongoDB Atlas connected (async writes enabled)")
 
-    # Update count when line is crossed
+    
     def update(self, track_id, direction, stop, stop_index, centroid_x=None, centroid_y=None):
 
         key = (track_id, stop_index)
         if key in self.processed_ids:
             return
 
-        # Spatial-temporal dedup: same person with new ID crossing again
+      
         if centroid_x is not None and centroid_y is not None:
             now = datetime.now(self.tz)
             self._prune_recent_crossings(now)
@@ -84,9 +78,7 @@ class PassengerCounter:
             if len(self.recent_crossings) > MAX_RECENT_CROSSINGS:
                 self.recent_crossings.pop(0)
 
-        # Enqueue individual event for async write to MongoDB so
-        # the video processing loop never blocks on network latency.
-        # We also store a realtime snapshot of totals at this moment.
+    
         self._event_queue.put({
             "track_id": track_id,
             "direction": direction,
@@ -99,7 +91,6 @@ class PassengerCounter:
         })
 
     def _prune_recent_crossings(self, now):
-        # Remove crossings older than CROSSING_DEDUP_SECONDS.
         cutoff = now.timestamp() - CROSSING_DEDUP_SECONDS
         self.recent_crossings = [
             c for c in self.recent_crossings
@@ -107,7 +98,6 @@ class PassengerCounter:
         ]
 
     def _is_duplicate_crossing(self, cx, cy, direction, now):
-        # True if a recent crossing with same direction exists within radius.
         now_ts = now.timestamp()
         for (rcx, rcy, rdir, rts) in self.recent_crossings:
             if rdir != direction:
@@ -119,16 +109,11 @@ class PassengerCounter:
                 return True
         return False
 
-    # Store stop-wise summary
     def store_stop_data(self, stop, stop_index):
-        
-        # Stores aggregated passenger data for a stop.
-        
+                
 
         timestamp = datetime.now(self.tz)
 
-        # Enqueue stop summary for async write so we do not block
-        # the main loop at stop transitions.
         self._stop_queue.put({
             "stop": stop,
             "stop_index": stop_index,
@@ -138,10 +123,8 @@ class PassengerCounter:
             "timestamp": timestamp,
         })
 
-    # Get current counts
     def get_counts(self):
         
-        # Returns (entered, exited, inside)
         
         return self.entered, self.exited, self.inside
 
@@ -152,7 +135,6 @@ class PassengerCounter:
         """
         while self._db_thread_running or not self._queues_empty():
             try:
-                # Prioritize event writes; fall back to stop docs.
                 try:
                     event = self._event_queue.get(timeout=0.1)
                     try:
@@ -187,12 +169,10 @@ class PassengerCounter:
         Signal the background DB writer to stop after flushing queues
         and close the MongoDB client. Call this once on clean shutdown.
         """
-        # Stop accepting new work and wait for queues to drain.
         self._db_thread_running = False
         try:
             self._event_queue.join()
             self._stop_queue.join()
         except Exception:
             pass
-        # Now it is safe to close the client; worker loop will exit.
         self.client.close()

@@ -4,10 +4,10 @@ CAMERA_INDEX = 0
 FRAME_WIDTH = 960
 FRAME_HEIGHT = 540
 
-USE_ROI = True   # Turn ROI ON/OFF easily
+USE_ROI = True 
 
-# ROI SETTINGS (ratios of full-frame width/height)
-ROI_X1_RATIO = 0.45  # 55% from left
+# ROI SETTINGS 
+ROI_X1_RATIO = 0.45  # 35% from left
 ROI_X2_RATIO = 0.98  # 98% from left
 ROI_Y1_RATIO = 0.10  # 20% from top
 ROI_Y2_RATIO = 0.98  # 98% from top
@@ -92,14 +92,18 @@ DB_NAME = "iRTMS"
 
 # MADDY
 # YOLO SETTINGS
-# MODEL_PATH = "yolov8l.pt"
-MODEL_PATH = r"C:\Users\silent killer\runs\detect\train3\weights\best.pt"
+# MODEL_PATH = "yolov8m.pt"
+# MODAL_PATH = r"C:\Users\SELVARAGAVAN\OneDrive\Documents\Team3Pro\RUN LOGS\Data3k\runs\detect\train3\weights\best.pt"
+# MODEL_PATH = r"C:\Users\SELVARAGAVAN\OneDrive\Documents\Team3Pro\RUN LOGS\Data7k\runs\detect\train\weights\best.pt"
+MODEL_PATH = r"C:\Users\SELVARAGAVAN\OneDrive\Documents\Team3Pro\runs\detect\train9\weights\best.pt"
 IMAGE_SIZE = 640  
 CONFIDENCE_THRESHOLD = 0.30  
 IOU_THRESHOLD = 0.5
 MAX_DETECTIONS = 40  
 DEVICE = 0                    
 HALF_PRECISION = True         # Use FP16
+TARGET_CLASSES = [0]          
+MIN_BOX_AREA = 1500        
 
 # DEEPSORT SETTINGS
 MAX_AGE = 30                  
@@ -109,9 +113,9 @@ MAX_COSINE_DISTANCE = 0.25
 NN_BUDGET = 100
 
 # LINE CROSSING (anti ID-switch)
-LINE_POSITION_RATIO = 0.50    # Virtual line at 38% from top
-LINE_HYSTERESIS_RATIO = 0.02  # Band around line (2% of height); crossing = zone-to-zonec
-CROSSING_COOLDOWN_FRAMES = 20 # After counting, ignore this track_id for N frames
+LINE_POSITION_RATIO = 0.50    
+LINE_HYSTERESIS_RATIO = 0.02  
+CROSSING_COOLDOWN_FRAMES = 20
 
 INVERT_COUNTING_DIRECTION = True
 

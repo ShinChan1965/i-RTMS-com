@@ -1,6 +1,6 @@
 from config.config import (
     CONFIDENCE_THRESHOLD, IOU_THRESHOLD, MAX_DETECTIONS,
-    DEVICE, HALF_PRECISION, IMAGE_SIZE,
+    DEVICE, HALF_PRECISION, IMAGE_SIZE, TARGET_CLASSES, MIN_BOX_AREA,
 )
 
 class YOLODetector:
@@ -14,7 +14,7 @@ class YOLODetector:
             source=frame,
             conf=CONFIDENCE_THRESHOLD,
             iou=IOU_THRESHOLD,
-            classes=[0],
+            classes=TARGET_CLASSES,
             max_det=MAX_DETECTIONS,
             imgsz=IMAGE_SIZE,
             device=DEVICE,
@@ -32,7 +32,7 @@ class YOLODetector:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
 
                 # Remove very small boxes (noise filtering)
-                if (x2 - x1) * (y2 - y1) < 1500:
+                if (x2 - x1) * (y2 - y1) < MIN_BOX_AREA:
                     continue
 
                 detections.append([x1, y1, x2, y2, conf])

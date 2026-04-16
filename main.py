@@ -1,9 +1,9 @@
-# AUTO-RESTART + ROI + DEBUG/DEPLOYMENT VERSION
 import cv2
 import torch
 torch.backends.cudnn.benchmark = True
 from ultralytics import YOLO
 import time
+import os
 from collections import deque
 
 from camera.video_stream import VideoStream
@@ -25,9 +25,8 @@ from config.config import (
     FRAME_SKIP
 )
 
-# MODE SWITCH
-DEBUG_MODE = True   # True = Debug | False = Deployment
-PROFILE_LOOP_TIME = False  # Print real loop time / FPS periodically
+DEBUG_MODE = True   
+PROFILE_LOOP_TIME = False 
 
 
 def _iou(boxA, boxB):
@@ -58,7 +57,6 @@ def _iou(boxA, boxB):
 
 def main():
     
-    # INITIALIZATION
     video = VideoStream()
     tracker = DeepSORTTracker()
     line = LineCrossing(
@@ -68,7 +66,10 @@ def main():
         invert_direction=INVERT_COUNTING_DIRECTION,
     )
     counter = PassengerCounter()
-    model = YOLO(MODEL_PATH)
+    model_path = MODEL_PATH
+    if os.path.isdir(model_path):
+        model_path = os.path.join(model_path, "best.pt")
+    model = YOLO(model_path)
     yolo = YOLODetector(model)
     current_stop = "Surandai"
     stop_index = 1
@@ -83,7 +84,6 @@ def main():
 
     frame_count = 0
 
-    # Rolling loop-time stats (measured INSIDE the while loop)
     loop_times = deque(maxlen=60)
     last_profile_print = time.perf_counter()
 
@@ -103,17 +103,11 @@ def main():
             ROI_Y1 = int(h * ROI_Y1_RATIO)
             ROI_Y2 = int(h * ROI_Y2_RATIO)
 
-            # ROI SELECTION
             if USE_ROI:
                 detection_frame = frame[ROI_Y1:ROI_Y2, ROI_X1:ROI_X2]
             else:
                 detection_frame = frame
 
-
-            # YOLO DETECTION
-            # detections = yolo.detect(detection_frame)
-                            # or
-            # Decide whether to run YOLO this frame (frame skipping)
             frame_count += 1
             run_detection = (FRAME_SKIP <= 1) or (frame_count % FRAME_SKIP == 0)
 
@@ -122,16 +116,11 @@ def main():
             else:
                 detections = []
 
-
-
-            # DEEPSORT TRACKING
             tracks = tracker.update(detections, detection_frame)
 
-            # DRAW VIRTUAL LINE (DEBUG ONLY)
             if DEBUG_MODE:
                 line.draw_line(frame)
 
-                # Draw ROI box visually
                 if USE_ROI:
                     cv2.rectangle(
                         frame,
@@ -141,8 +130,6 @@ def main():
                         2
                     )
 
-            # PROCESS TRACKS
-            # 1) Collect confirmed tracks with full-frame boxes.
             confirmed_tracks = []
             for track in tracks:
                 if not track.is_confirmed():
@@ -150,7 +137,6 @@ def main():
 
                 x1, y1, x2, y2 = map(int, track.to_ltrb())
 
-                # Convert ROI coords back to full frame
                 if USE_ROI:
                     x1 += ROI_X1
                     x2 += ROI_X1
@@ -159,7 +145,6 @@ def main():
 
                 confirmed_tracks.append((track, (x1, y1, x2, y2)))
 
-            # 2) Suppress duplicate / heavily overlapping boxes.
             deduped_tracks = []
             IOU_SUPPRESS_THRESHOLD = 0.7
 
@@ -172,7 +157,6 @@ def main():
                 if not duplicate:
                     deduped_tracks.append((track, box))
 
-            # 3) Use deduped tracks for counting + drawing.
             for track, (x1, y1, x2, y2) in deduped_tracks:
                 track_id = track.track_id
 
@@ -195,7 +179,6 @@ def main():
                         f"at stop {current_stop}"
                     )
 
-                # DEBUG visuals only
                 if DEBUG_MODE:
                     cv2.rectangle(
                         frame,
@@ -215,7 +198,6 @@ def main():
                         2
                     )
 
-            # DISPLAY INFO (DEBUG ONLY)
             if DEBUG_MODE:
                 entered, exited, current = counter.get_counts()
 
@@ -249,10 +231,8 @@ def main():
                     print("🛑 Exiting system")
                     break
 
-            # Advance line-crossing frame index for cooldown
             line.tick()
 
-            # Correct loop-time measurement (this is the right place)
             if PROFILE_LOOP_TIME:
                 dt = time.perf_counter() - loop_start
                 loop_times.append(dt)
@@ -269,7 +249,6 @@ def main():
 
     finally:
         counter.store_stop_data(current_stop, stop_index)
-        # Flush and close MongoDB resources (async writer).
         counter.close()
         video.release()
 

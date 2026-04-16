@@ -1,7 +1,4 @@
 from deep_sort_realtime.deepsort_tracker import DeepSort
-# import time
-
-# start = time.time()
 from config.config import (
     MAX_AGE,
     MIN_HITS,
@@ -36,6 +33,4 @@ class DeepSORTTracker:
                 conf,
                 "person"
             ))
-        # tracks = self.tracker.update_tracks(formatted, frame=frame)
-        # print("DeepSORT time:", time.time() - start)
         return self.tracker.update_tracks(formatted, frame=frame)
